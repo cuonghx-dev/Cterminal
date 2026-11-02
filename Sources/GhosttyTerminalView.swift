@@ -2225,7 +2225,14 @@ class GhosttyNSView: NSView, NSUserInterfaceValidations {
         }
         let pasteItem = menu.addItem(withTitle: "Paste", action: #selector(paste(_:)), keyEquivalent: "")
         pasteItem.target = self
+        menu.addItem(.separator())
+        let mermaidItem = menu.addItem(withTitle: "Render Mermaid Diagram", action: #selector(renderMermaid(_:)), keyEquivalent: "")
+        mermaidItem.target = self
         return menu
+    }
+
+    @objc private func renderMermaid(_ sender: Any?) {
+        MermaidPreviewController.renderFromFocusedSurface(terminalSurface)
     }
 
     @objc private func triggerFlash(_ sender: Any?) {

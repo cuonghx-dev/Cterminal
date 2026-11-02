@@ -204,6 +204,11 @@ struct cterApp: App {
                     .keyboardShortcut("e", modifiers: .command)
                     .disabled(!tabManager.canUseSelectionForFind)
                 }
+
+                Button("Render Mermaid Diagram") {
+                    MermaidPreviewController.renderFromFocusedSurface(tabManager.selectedSurface)
+                }
+                .keyboardShortcut("m", modifiers: [.command, .shift])
             }
 
             // Tab navigation

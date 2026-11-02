@@ -33,6 +33,8 @@
 		B900000BA1B2C3D4E5F60719 /* cter in Copy CLI */ = {isa = PBXBuildFile; fileRef = B9000004A1B2C3D4E5F60719 /* cter */; };
 		84E00D47E4584162AE53BC8D /* xterm-ghostty in Resources */ = {isa = PBXBuildFile; fileRef = B2E7294509CC42FE9191870E /* xterm-ghostty */; };
 		C1D2E3F4A5B6C7D8E9F00001 /* shell-integration in Resources */ = {isa = PBXBuildFile; fileRef = C1D2E3F4A5B6C7D8E9F00002 /* shell-integration */; };
+		A5001401 /* MermaidPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5001400 /* MermaidPreview.swift */; };
+		A5001403 /* mermaid in Resources */ = {isa = PBXBuildFile; fileRef = A5001402 /* mermaid */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -97,6 +99,8 @@
 		A5001101 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		B2E7294509CC42FE9191870E /* xterm-ghostty */ = {isa = PBXFileReference; lastKnownFileType = file; path = "ghostty/terminfo/78/xterm-ghostty"; sourceTree = "<group>"; };
 		C1D2E3F4A5B6C7D8E9F00002 /* shell-integration */ = {isa = PBXFileReference; lastKnownFileType = folder; path = "shell-integration"; sourceTree = "<group>"; };
+		A5001400 /* MermaidPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MermaidPreview.swift; sourceTree = "<group>"; };
+		A5001402 /* mermaid */ = {isa = PBXFileReference; lastKnownFileType = folder; path = mermaid; sourceTree = "<group>"; };
 		B9000001A1B2C3D4E5F60719 /* cter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = cter.swift; sourceTree = "<group>"; };
 		B9000004A1B2C3D4E5F60719 /* cter */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = cter; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -127,6 +131,7 @@
 				A5001100 /* Assets.xcassets in Resources */,
 				84E00D47E4584162AE53BC8D /* xterm-ghostty in Resources */,
 				C1D2E3F4A5B6C7D8E9F00001 /* shell-integration in Resources */,
+				A5001403 /* mermaid in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -190,6 +195,7 @@
 				A5001218 /* TitlebarAccessory.swift */,
 				A5001241 /* WindowDecorationsController.swift */,
 				A5001222 /* WindowAccessor.swift */,
+				A5001400 /* MermaidPreview.swift */,
 			);
 			path = Sources;
 			sourceTree = "<group>";
@@ -207,6 +213,7 @@
 			children = (
 				B2E7294509CC42FE9191870E /* xterm-ghostty */,
 				C1D2E3F4A5B6C7D8E9F00002 /* shell-integration */,
+				A5001402 /* mermaid */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -298,6 +305,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A5001401 /* MermaidPreview.swift in Sources */,
 				A5001001 /* cterApp.swift in Sources */,
 				A5001002 /* ContentView.swift in Sources */,
 				A50012F1 /* Backport.swift in Sources */,
