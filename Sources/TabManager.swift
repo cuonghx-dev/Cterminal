@@ -35,6 +35,13 @@ final class TerminalPane: Identifiable, ObservableObject {
         self.selectedSurfaceId = surface.id
     }
 
+    /// Builds a pane with several surfaces (session restore). `surfaces` must not be empty.
+    init(surfaces: [TerminalSurface], selectedIndex: Int) {
+        precondition(!surfaces.isEmpty, "TerminalPane needs at least one surface")
+        self.surfaces = surfaces
+        self.selectedSurfaceId = surfaces[max(0, min(selectedIndex, surfaces.count - 1))].id
+    }
+
     var selectedSurface: TerminalSurface? {
         surfaces.first(where: { $0.id == selectedSurfaceId }) ?? surfaces.first
     }
@@ -166,6 +173,66 @@ class Tab: Identifiable, ObservableObject {
         self.splitTree = SplitTree(view: TerminalPane(surface: surface))
         self.focusedSurfaceId = surface.id
         applyMetadata(metadata, for: surface.id)
+    }
+
+    /// Rebuilds a tab from a saved session: same split layout and pane tabs, each running a
+    /// fresh shell in its saved directory (or the home folder if it no longer exists).
+    init(restoring snapshot: SessionSnapshot.TabSnapshot) {
+        let id = UUID()
+        self.id = id
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let tabDirectory = SessionSnapshot.existingDirectory(snapshot.currentDirectory)
+        self.currentDirectory = tabDirectory ?? home
+
+        var directories: [UUID: String] = [:]
+        var titles: [UUID: String] = [:]
+        var orderedSurfaceIds: [UUID] = []
+
+        func makeNode(_ node: SessionSnapshot.NodeSnapshot) -> SplitTree<TerminalPane>.Node {
+            switch node {
+            case .pane(let pane):
+                let saved = pane.surfaces.isEmpty ? [SessionSnapshot.SurfaceSnapshot()] : pane.surfaces
+                let surfaces = saved.map { savedSurface -> TerminalSurface in
+                    let directory = SessionSnapshot.existingDirectory(savedSurface.directory) ?? tabDirectory
+                    let surface = TerminalSurface(
+                        tabId: id,
+                        context: GHOSTTY_SURFACE_CONTEXT_TAB,
+                        configTemplate: nil,
+                        workingDirectory: directory
+                    )
+                    if let directory { directories[surface.id] = directory }
+                    if let title = savedSurface.title, !title.isEmpty { titles[surface.id] = title }
+                    orderedSurfaceIds.append(surface.id)
+                    return surface
+                }
+                return .leaf(view: TerminalPane(surfaces: surfaces, selectedIndex: pane.selectedIndex))
+            case .split(let split):
+                return .split(.init(
+                    direction: split.direction == .horizontal ? .horizontal : .vertical,
+                    ratio: max(0.1, min(0.9, split.ratio)),
+                    left: makeNode(split.left),
+                    right: makeNode(split.right)
+                ))
+            }
+        }
+
+        let root = makeNode(snapshot.layout)
+        self.splitTree = SplitTree(root: root, zoomed: nil)
+        self.surfaceDirectories = directories
+        self.surfaceTitles = titles
+        self.isPinned = snapshot.isPinned
+
+        let focusedId = snapshot.focusedSurfaceIndex
+            .flatMap { orderedSurfaceIds.indices.contains($0) ? orderedSurfaceIds[$0] : nil }
+            ?? root.leftmostLeaf().selectedSurface?.id
+        let title = focusedId.flatMap { titles[$0] } ?? "Terminal"
+        self.processTitle = title
+        self.title = title
+        self.customTitle = nil
+        self.focusedSurfaceId = focusedId
+        if let customTitle = snapshot.customTitle {
+            setCustomTitle(customTitle)
+        }
     }
 
     var panes: [TerminalPane] {
@@ -610,8 +677,18 @@ class TabManager: ObservableObject {
     private var isNavigatingHistory = false
     private let maxHistorySize = 50
 
+    private let sessionStore = SessionStore()
+    private var sessionSaveTimer: Timer?
+    /// How often the open layout is written to disk. Saving only at quit would lose
+    /// everything on a crash, so the snapshot is refreshed periodically (unchanged
+    /// snapshots are not rewritten).
+    private static let sessionSaveInterval: TimeInterval = 2
+
     init() {
-        addTab()
+        if !restoreSession() {
+            addTab()
+        }
+        startSessionAutosave()
         observers.append(NotificationCenter.default.addObserver(
             forName: .ghosttyDidSetTitle,
             object: nil,
@@ -1157,6 +1234,43 @@ class TabManager: ObservableObject {
         historyIndex < tabHistory.count - 1 && tabHistory.suffix(from: historyIndex + 1).contains { tabId in
             tabs.contains { $0.id == tabId }
         }
+    }
+
+    // MARK: - Session persistence
+
+    /// Rebuilds tabs from the last saved session. Returns false when there is nothing to
+    /// restore (no snapshot, restore disabled, or an unreadable file).
+    private func restoreSession() -> Bool {
+        guard SessionStore.isRestoreEnabled, let snapshot = sessionStore.load() else { return false }
+        let restored = snapshot.tabs.map { Tab(restoring: $0) }
+        guard !restored.isEmpty else { return false }
+        tabs = restored
+        let selectedIndex = snapshot.selectedTabIndex.flatMap { restored.indices.contains($0) ? $0 : nil } ?? 0
+        let selected = restored[selectedIndex]
+        selectedTabId = selected.id
+        NotificationCenter.default.post(
+            name: .ghosttyDidFocusTab,
+            object: nil,
+            userInfo: [GhosttyNotificationKey.tabId: selected.id]
+        )
+        NSLog("Session: restored %d tab(s)", restored.count)
+        return true
+    }
+
+    private func startSessionAutosave() {
+        let timer = Timer(timeInterval: Self.sessionSaveInterval, repeats: true) { [weak self] _ in
+            self?.saveSession()
+        }
+        timer.tolerance = 0.5
+        RunLoop.main.add(timer, forMode: .common)
+        sessionSaveTimer = timer
+    }
+
+    /// Writes the current layout to disk if it changed since the last write.
+    func saveSession() {
+        let snapshot = sessionSnapshot()
+        guard !snapshot.tabs.isEmpty else { return }
+        sessionStore.save(snapshot)
     }
 
     func newSplit(tabId: UUID, surfaceId: UUID, direction: SplitTree<TerminalPane>.NewDirection) -> UUID? {

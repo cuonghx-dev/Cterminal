@@ -542,6 +542,7 @@ struct SettingsView: View {
     @AppStorage("sidebarShowProgress") private var sidebarShowProgress = true
     @AppStorage("sidebarShellIntegration") private var sidebarShellIntegration = true
     @AppStorage("sidebarMaxLogEntries") private var sidebarMaxLogEntries = 50
+    @AppStorage(SessionStore.restoreSettingKey) private var restoreSessionOnLaunch = true
     @State private var notificationsShortcut = KeyboardShortcutSettings.showNotificationsShortcut()
     @State private var jumpToUnreadShortcut = KeyboardShortcutSettings.jumpToUnreadShortcut()
 
@@ -556,6 +557,16 @@ struct SettingsView: View {
                     }
                 }
                 .pickerStyle(.radioGroup)
+            }
+
+            Section {
+                Toggle("Restore tabs on launch", isOn: $restoreSessionOnLaunch)
+            } header: {
+                Text("Startup")
+            } footer: {
+                Text("Reopens the previous tabs, splits and pane tabs after a quit or crash. Each terminal starts a new shell in its last directory.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
 
             Section {
@@ -666,6 +677,7 @@ struct SettingsView: View {
         sidebarShowProgress = true
         sidebarShellIntegration = true
         sidebarMaxLogEntries = 50
+        restoreSessionOnLaunch = true
         KeyboardShortcutSettings.resetAll()
         notificationsShortcut = KeyboardShortcutSettings.showNotificationsDefault
         jumpToUnreadShortcut = KeyboardShortcutSettings.jumpToUnreadDefault
