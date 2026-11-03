@@ -27,7 +27,12 @@ enum MermaidSourceExtractor {
         while let last = lines.last, isBlank(last) || isClosingFence(last) {
             lines.removeLast()
         }
-        guard !lines.isEmpty else { return nil }
+        // A right-click word-selects under the cursor (Ghostty's context-menu
+        // right-click action), so a selection that isn't a diagram must not win
+        // over the viewport scan.
+        guard let first = lines.first else { return nil }
+        let head = trimmed(first)
+        guard startsWithDiagramKeyword(first) || head.hasPrefix("%%{") || head.hasPrefix("---") else { return nil }
         let source = dedent(lines).joined(separator: "\n")
         return source.isEmpty ? nil : source
     }
