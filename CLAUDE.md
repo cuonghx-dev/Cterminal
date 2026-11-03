@@ -39,8 +39,9 @@ Limits:
 - `TerminalView.swift` (SwiftTerm) is not in the app target and is excluded.
 
 To install a build as the main app, copy the built binary into a copy of `/Applications/CTerminal.app`
-(keep its bundle id, no `LSEnvironment`), add `Resources/mermaid`, ad-hoc sign it, and keep the old
-bundle as a backup. Quitting the running app ends every tab's processes.
+(keep its bundle id, no `LSEnvironment`), add `Resources/mermaid`, ad-hoc sign it, and replace the
+old bundle (no backup needed). Replacing the bundle on disk is safe while the app runs; the new build
+starts on next launch. Quitting the running app ends every tab's processes.
 
 When rebuilding GhosttyKit.xcframework, always use Release optimizations:
 
