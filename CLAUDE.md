@@ -16,6 +16,32 @@ xcodebuild -project GhosttyTabs.xcodeproj -scheme cter -configuration Debug -des
 ./scripts/reload.sh --tag <name>  # isolated side-by-side app (own bundle ID, socket, derived data)
 ```
 
+### Without Xcode (Command Line Tools only)
+
+`xcodebuild` needs a full Xcode install. With only Command Line Tools, use:
+
+```bash
+./scripts/build-no-xcode.sh --open            # tag "nox": /tmp/cter-nox-swiftc/cter DEV nox.app
+./scripts/build-no-xcode.sh --tag <name> --debug
+```
+
+It compiles `Sources/` with `swiftc` (`-O -wmo`, or `--debug`), links the prebuilt
+`GhosttyKit.xcframework/macos-arm64_x86_64/ghostty-internal.a`, and puts the binary into a copy of
+`--base` (default `/Applications/CTerminal.app`). The copy gets a tagged bundle id, name and socket
+like `reload.sh --tag`, with `CTER_SOCKET_MODE=full`, so tests reach it with `CTER_TAG=<name>`.
+Build takes about 1.5 min.
+
+Limits:
+- Needs an existing GhosttyKit build and a base app; it does not run zig, `actool` or Metal.
+- Only the binary and `Resources/mermaid` are refreshed. Info.plist, icon, terminfo, shell
+  integration and the `cter` CLI come from the base app, so a new resource or Info.plist key in the
+  Xcode project must be added to the script too.
+- `TerminalView.swift` (SwiftTerm) is not in the app target and is excluded.
+
+To install a build as the main app, copy the built binary into a copy of `/Applications/CTerminal.app`
+(keep its bundle id, no `LSEnvironment`), add `Resources/mermaid`, ad-hoc sign it, and keep the old
+bundle as a backup. Quitting the running app ends every tab's processes.
+
 When rebuilding GhosttyKit.xcframework, always use Release optimizations:
 
 ```bash
@@ -33,7 +59,11 @@ Python socket tests in `tests/` drive a running app over `/tmp/cter.sock`:
 
 ```bash
 python3 tests/test_ctrl_socket.py
+CTER_TAG=nox python3 tests/test_close_tab_kills_processes.py   # tagged app from reload.sh / build-no-xcode.sh
 ```
+
+The installed app's default socket mode rejects `list_tabs` / `new_tab` / `close_tab`; run tests
+against a tagged build (socket mode `full`) via `CTER_TAG`.
 
 ## Pitfalls
 
