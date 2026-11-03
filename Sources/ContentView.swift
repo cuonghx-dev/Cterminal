@@ -458,6 +458,17 @@ struct VerticalTabsSidebar: View {
     @Environment(\.controlActiveState) private var controlActiveState
 
     var body: some View {
+        VStack(spacing: 0) {
+            tabList
+            SidebarVersionLabel()
+        }
+        .ignoresSafeArea()
+        .background(SidebarBackdrop().ignoresSafeArea())
+        .onAppear { shortcutHints.start() }
+        .onDisappear { shortcutHints.stop() }
+    }
+
+    private var tabList: some View {
         GeometryReader { proxy in
             ScrollView {
                 VStack(spacing: 0) {
@@ -495,10 +506,6 @@ struct VerticalTabsSidebar: View {
             .modifier(ClearScrollBackground())
             .accessibilityIdentifier("Sidebar")
         }
-        .ignoresSafeArea()
-        .background(SidebarBackdrop().ignoresSafeArea())
-        .onAppear { shortcutHints.start() }
-        .onDisappear { shortcutHints.stop() }
     }
 
     /// Mirrors the Tab menu: Cmd+1...8 select by position, Cmd+9 selects the last tab.
@@ -506,6 +513,29 @@ struct VerticalTabsSidebar: View {
         if index == count - 1 { return "⌘9" }
         if index < 8 { return "⌘\(index + 1)" }
         return nil
+    }
+}
+
+/// App version pinned to the bottom-left corner of the sidebar.
+private struct SidebarVersionLabel: View {
+    private static let text: String? = {
+        guard let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String,
+              !version.isEmpty else { return nil }
+        return "v\(version)"
+    }()
+
+    var body: some View {
+        if let text = Self.text {
+            Text(text)
+                .font(.system(size: 10, weight: .medium).monospacedDigit())
+                .foregroundStyle(.tertiary)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .allowsHitTesting(false)
+                .accessibilityIdentifier("SidebarVersion")
+        }
     }
 }
 
