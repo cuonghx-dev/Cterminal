@@ -1597,6 +1597,29 @@ class GhosttyNSView: NSView, NSUserInterfaceValidations {
         bounds.width > 1 && bounds.height > 1
     }
 
+    /// Marks this terminal's unread notifications read when the user is looking at it:
+    /// its window is key, its tab is selected and it is visible. Notifications only get
+    /// read on app activation, tab selection or a focus change otherwise, so one that
+    /// arrived while another window was key stayed unread while the user worked in the tab.
+    fileprivate func markNotificationsRead(requireFocusedSurface: Bool) {
+        guard let terminalSurface,
+              window?.isKeyWindow == true,
+              !isHiddenOrHasHiddenAncestor,
+              let tabManager = AppDelegate.shared?.tabManager,
+              tabManager.selectedTabId == terminalSurface.tabId else { return }
+        if requireFocusedSurface,
+           tabManager.focusedSurfaceId(for: terminalSurface.tabId) != terminalSurface.id {
+            return
+        }
+        let store = TerminalNotificationStore.shared
+        let tabId = terminalSurface.tabId
+        // Tab-level notifications (no surface) belong to whichever terminal the user is in.
+        for surfaceId in [terminalSurface.id, nil] as [UUID?]
+        where store.hasUnreadNotification(forTabId: tabId, surfaceId: surfaceId) {
+            store.markRead(forTabId: tabId, surfaceId: surfaceId)
+        }
+    }
+
     override func becomeFirstResponder() -> Bool {
         let result = super.becomeFirstResponder()
         if result, let surface = surface {
@@ -1782,6 +1805,8 @@ class GhosttyNSView: NSView, NSUserInterfaceValidations {
             // control keys as unhandled commands (escape leak, alert beep).
             return
         }
+        // Typing into a terminal means its notifications have been seen (#2).
+        markNotificationsRead(requireFocusedSurface: false)
 
         let action = event.isARepeat ? GHOSTTY_ACTION_REPEAT : GHOSTTY_ACTION_PRESS
 
@@ -2631,6 +2656,9 @@ final class GhosttySurfaceScrollView: NSView {
         ) { [weak self] _ in
             self?.updateFocusForWindow()
             self?.requestFocus()
+            // Returning to the window from a popover, preview or settings window does not
+            // reactivate the app or re-focus the surface, so nothing else marks it read.
+            self?.surfaceView.markNotificationsRead(requireFocusedSurface: true)
         })
         windowObservers.append(NotificationCenter.default.addObserver(
             forName: NSWindow.didResignKeyNotification,
