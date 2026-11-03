@@ -887,6 +887,9 @@ class TabManager: ObservableObject {
         AppDelegate.shared?.notificationStore?.clearNotifications(forTabId: tab.id)
 
         if let index = tabs.firstIndex(where: { $0.id == tab.id }) {
+            // Surfaces moved out by `moveSurface` are already detached, so this only ends
+            // terminals that still belong to the tab.
+            tab.allSurfaces.forEach { $0.close() }
             tabs.remove(at: index)
 
             if selectedTabId == tab.id {
@@ -1322,7 +1325,11 @@ class TabManager: ObservableObject {
     func closeSurface(tabId: UUID, surfaceId: UUID) -> Bool {
         guard let tabIndex = tabs.firstIndex(where: { $0.id == tabId }) else { return false }
         let tab = tabs[tabIndex]
+        let surface = tab.surface(for: surfaceId)
+        // `Tab.closeSurface` only removes the surface from the layout (moves reuse it via
+        // `detachSurface`); a real close must also end the terminal's processes.
         guard tab.closeSurface(surfaceId) else { return false }
+        surface?.close()
         AppDelegate.shared?.notificationStore?.clearNotifications(forTabId: tabId, surfaceId: surfaceId)
 
         if tab.splitTree.isEmpty {

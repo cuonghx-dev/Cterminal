@@ -835,6 +835,13 @@ final class TerminalSurface: Identifiable, ObservableObject {
     }
 
     private(set) var surface: ghostty_surface_t?
+    /// Set by `close()`. A closed surface never creates a new Ghostty surface (and shell).
+    private(set) var isClosed = false
+    private static let teardownQueue = DispatchQueue(
+        label: "cter.terminal-surface.teardown",
+        qos: .utility,
+        attributes: .concurrent
+    )
     private weak var attachedView: GhosttyNSView?
     private var isVisible = true
     let id: UUID
@@ -908,6 +915,7 @@ final class TerminalSurface: Identifiable, ObservableObject {
     }
 
     func attachToView(_ view: GhosttyNSView) {
+        guard !isClosed else { return }
         // If already attached to this view, nothing to do
         if attachedView === view && surface != nil {
             updateMetalLayer(for: view)
@@ -1190,6 +1198,36 @@ final class TerminalSurface: Identifiable, ObservableObject {
     func hasSelection() -> Bool {
         guard let surface = surface else { return false }
         return ghostty_surface_has_selection(surface)
+    }
+
+    /// Ends this terminal now instead of waiting for ARC.
+    ///
+    /// Freeing the Ghostty surface closes the PTY and signals the child process group
+    /// (SIGHUP, then SIGTERM/SIGKILL), so the shell and everything it runs exit with the
+    /// tab or pane. Closing must not depend on `deinit`: view closures (focus/flash
+    /// handlers) retain the surface, so a closed surface may never be deallocated.
+    ///
+    /// The free runs off the main thread because Ghostty waits up to its SIGHUP grace
+    /// (12 s) for the child to exit.
+    func close() {
+        guard !isClosed else { return }
+        isClosed = true
+        searchNeedleCancellable = nil
+        // Drop the handlers that retain this surface (and its tab) so ARC can reclaim them.
+        hostedView.setFocusHandler(nil)
+        hostedView.setTriggerFlashHandler(nil)
+
+        guard let surfaceToFree = surface else { return }
+        surface = nil
+        // Ghostty callbacks get the NSView as unretained userdata; keep the views alive
+        // until the native free has joined Ghostty's threads.
+        let retainedViews = (surfaceView, hostedView)
+        Self.teardownQueue.async {
+            ghostty_surface_free(surfaceToFree)
+            DispatchQueue.main.async {
+                withExtendedLifetime(retainedViews) {}
+            }
+        }
     }
 
     deinit {
@@ -3283,8 +3321,7 @@ struct GhosttyTerminalView: NSViewRepresentable {
         terminalSurface.setVisible(isVisible)
         view.attachSurface(terminalSurface)
         view.setActive(isActive)
-        view.setFocusHandler { onFocus?(terminalSurface.id) }
-        view.setTriggerFlashHandler(onTriggerFlash)
+        installHandlers(on: view)
         return view
     }
 
@@ -3292,7 +3329,17 @@ struct GhosttyTerminalView: NSViewRepresentable {
         terminalSurface.setVisible(isVisible)
         nsView.attachSurface(terminalSurface)
         nsView.setActive(isActive)
-        nsView.setFocusHandler { onFocus?(terminalSurface.id) }
-        nsView.setTriggerFlashHandler(onTriggerFlash)
+        installHandlers(on: nsView)
+    }
+
+    /// Capture only the surface id: capturing `terminalSurface` (via `self`) in a handler
+    /// stored on its own view is a retain cycle that keeps the surface alive.
+    private func installHandlers(on view: GhosttySurfaceScrollView) {
+        // A SwiftUI update can land after `close()`; reinstalling would recreate the cycle.
+        guard !terminalSurface.isClosed else { return }
+        let surfaceId = terminalSurface.id
+        let onFocus = onFocus
+        view.setFocusHandler { onFocus?(surfaceId) }
+        view.setTriggerFlashHandler(onTriggerFlash)
     }
 }

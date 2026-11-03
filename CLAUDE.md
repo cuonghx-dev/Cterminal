@@ -38,3 +38,4 @@ python3 tests/test_ctrl_socket.py
 ## Pitfalls
 
 - Do not add an app-level display link or manual `ghostty_surface_draw` loop; rely on Ghostty wakeups/renderer to avoid typing lag.
+- Closing a terminal must call `TerminalSurface.close()` (`TabManager.closeTab` / `closeSurface(tabId:surfaceId:)` do). Removing a surface from the split tree alone leaves its shell running: view handlers retain the surface, so `deinit` (and `ghostty_surface_free`) may never run. `Tab.closeSurface` / `detachSurface` only re-layout, because drag-and-drop moves reuse the live surface.
