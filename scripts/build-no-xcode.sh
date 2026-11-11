@@ -96,7 +96,7 @@ pb "Add :LSEnvironment:CTER_SOCKET_MODE string full"
 echo "$SOCKET" > /tmp/cter-last-socket-path || true
 rm -f "$SOCKET"
 
-codesign --force --deep --sign - --timestamp=none "$APP" >/dev/null
+"$SCRIPT_DIR/sign-app.sh" "$APP"
 echo "==> Built ${APP}"
 echo "    bundle id: ${BUNDLE_ID}"
 echo "    socket:    ${SOCKET}"

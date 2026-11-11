@@ -40,8 +40,16 @@ Limits:
 
 To install a build as the main app, copy the built binary into a copy of `/Applications/CTerminal.app`
 (keep its bundle id, no `LSEnvironment`), add `Resources/mermaid` and `Resources/shell-integration`,
-ad-hoc sign it, and replace the old bundle (no backup needed). Replacing the bundle on disk is safe while the app runs; the new build
+sign it with `scripts/sign-app.sh`, and replace the old bundle (no backup needed). Replacing the bundle on disk is safe while the app runs; the new build
 starts on next launch. Quitting the running app ends every tab's processes.
+
+### Code signing
+
+`scripts/sign-app.sh` signs with the self-signed `cter-local` identity (create it once per machine
+with `scripts/create-signing-cert.sh`) and falls back to ad-hoc. Do not ad-hoc sign the installed app:
+an ad-hoc build gets a new cdhash each time, so macOS forgets privacy grants (e.g. "access files on a
+network volume") and asks again after every install. With `cter-local` the designated requirement is
+bundle id + certificate, so grants survive rebuilds.
 
 When rebuilding GhosttyKit.xcframework, always use Release optimizations:
 
