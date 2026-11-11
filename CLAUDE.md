@@ -33,14 +33,14 @@ Build takes about 1.5 min.
 
 Limits:
 - Needs an existing GhosttyKit build and a base app; it does not run zig, `actool` or Metal.
-- Only the binary and `Resources/mermaid` are refreshed. Info.plist, icon, terminfo, shell
-  integration and the `cter` CLI come from the base app, so a new resource or Info.plist key in the
-  Xcode project must be added to the script too.
+- Only the binary, `Resources/mermaid` and `Resources/shell-integration` are refreshed. Info.plist,
+  icon, terminfo and the `cter` CLI come from the base app, so a new resource or Info.plist key in
+  the Xcode project must be added to the script too.
 - `TerminalView.swift` (SwiftTerm) is not in the app target and is excluded.
 
 To install a build as the main app, copy the built binary into a copy of `/Applications/CTerminal.app`
-(keep its bundle id, no `LSEnvironment`), add `Resources/mermaid`, ad-hoc sign it, and replace the
-old bundle (no backup needed). Replacing the bundle on disk is safe while the app runs; the new build
+(keep its bundle id, no `LSEnvironment`), add `Resources/mermaid` and `Resources/shell-integration`,
+ad-hoc sign it, and replace the old bundle (no backup needed). Replacing the bundle on disk is safe while the app runs; the new build
 starts on next launch. Quitting the running app ends every tab's processes.
 
 When rebuilding GhosttyKit.xcframework, always use Release optimizations:

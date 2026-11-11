@@ -3,7 +3,8 @@ import Foundation
 /// Serializable snapshot of the open workspace tabs, their split layouts and pane tabs.
 /// Written periodically so the layout survives crashes and force quits, then used to
 /// rebuild the tabs on the next launch. Scrollback and running processes are not kept:
-/// each restored terminal starts a fresh shell in its saved directory.
+/// each restored terminal starts a fresh shell in its saved directory. Terminals that were
+/// running Claude Code re-run `claude --resume <session>` (see `ClaudeSessionStore`).
 struct SessionSnapshot: Codable, Equatable {
     static let currentVersion = 1
 
@@ -45,6 +46,15 @@ struct SessionSnapshot: Codable, Equatable {
     struct SurfaceSnapshot: Codable, Equatable {
         var directory: String?
         var title: String?
+        /// Claude Code session that was running in this terminal, resumed on restore.
+        var claudeSession: ClaudeSessionSnapshot?
+    }
+
+    struct ClaudeSessionSnapshot: Codable, Equatable {
+        var sessionId: String
+        /// Claude's working directory; `claude --resume` only finds sessions of the current project.
+        var directory: String?
+        var transcriptPath: String?
     }
 }
 
@@ -143,7 +153,8 @@ extension Tab {
             let surfaces = pane.surfaces.map { surface in
                 SessionSnapshot.SurfaceSnapshot(
                     directory: surfaceDirectories[surface.id],
-                    title: surfaceTitles[surface.id]
+                    title: surfaceTitles[surface.id],
+                    claudeSession: ClaudeSessionStore.shared.session(forSurface: surface.id)
                 )
             }
             let selectedIndex = pane.surfaces.firstIndex(where: { $0.id == pane.selectedSurfaceId }) ?? 0
@@ -182,5 +193,94 @@ extension SessionSnapshot {
             return nil
         }
         return trimmed
+    }
+}
+
+// MARK: - Claude Code sessions
+
+/// Tracks which Claude Code session runs in which terminal so the session can be resumed
+/// after the app quits or crashes.
+///
+/// The shell integration wraps `claude` in a function that passes a `SessionStart` hook via
+/// `--settings`. The hook (`cter-claude-hook.sh`) writes Claude's hook payload to
+/// `<directory>/<CTER_PANEL_ID>.json` on startup, `/resume` and `/clear`. When `claude`
+/// exits while its shell keeps running, the function deletes the file, so only sessions
+/// cut off by an app quit or crash (which also end the shell) stay recorded. The periodic
+/// session snapshot copies the recorded ids, and restore types `claude --resume <id>` into
+/// the new terminal.
+final class ClaudeSessionStore {
+    static let shared = ClaudeSessionStore()
+    static let resumeSettingKey = "resumeClaudeSessionsOnLaunch"
+
+    /// Exported to every terminal as `CTER_CLAUDE_SESSION_DIR`.
+    let directoryURL: URL
+
+    init(directoryURL: URL? = nil) {
+        self.directoryURL = directoryURL ?? SessionStore.defaultFileURL()
+            .deletingLastPathComponent()
+            .appendingPathComponent("claude-sessions", isDirectory: true)
+    }
+
+    static var isResumeEnabled: Bool {
+        UserDefaults.standard.object(forKey: resumeSettingKey) as? Bool ?? true
+    }
+
+    private struct HookPayload: Decodable {
+        var session_id: String?
+        var cwd: String?
+        var transcript_path: String?
+    }
+
+    private func fileURL(forSurface surfaceId: UUID) -> URL {
+        directoryURL.appendingPathComponent("\(surfaceId.uuidString).json", isDirectory: false)
+    }
+
+    /// The Claude session the hook recorded for this terminal, if one is running.
+    func session(forSurface surfaceId: UUID) -> SessionSnapshot.ClaudeSessionSnapshot? {
+        guard let data = try? Data(contentsOf: fileURL(forSurface: surfaceId)),
+              let payload = try? JSONDecoder().decode(HookPayload.self, from: data),
+              let sessionId = payload.session_id,
+              Self.isValidSessionId(sessionId) else {
+            return nil
+        }
+        return SessionSnapshot.ClaudeSessionSnapshot(
+            sessionId: sessionId,
+            directory: payload.cwd,
+            transcriptPath: payload.transcript_path
+        )
+    }
+
+    /// Forgets the session of a terminal the user closed, so it is not resumed later.
+    func removeSession(forSurface surfaceId: UUID) {
+        try? FileManager.default.removeItem(at: fileURL(forSurface: surfaceId))
+    }
+
+    /// Drops every record. Called at launch: records are keyed by terminal ids of the
+    /// previous run, whose sessions are already captured in the session snapshot.
+    func removeAll() {
+        let fileManager = FileManager.default
+        guard let files = try? fileManager.contentsOfDirectory(at: directoryURL, includingPropertiesForKeys: nil) else {
+            return
+        }
+        for file in files where file.pathExtension == "json" {
+            try? fileManager.removeItem(at: file)
+        }
+    }
+
+    /// Claude session ids are UUIDs. Validating keeps restore from typing arbitrary text
+    /// into a shell.
+    static func isValidSessionId(_ sessionId: String) -> Bool {
+        UUID(uuidString: sessionId) != nil
+    }
+
+    /// The shell input that resumes `session`, or nil if it can't be resumed (resume turned
+    /// off, invalid id, or Claude never wrote a transcript because no prompt was sent).
+    static func resumeInput(for session: SessionSnapshot.ClaudeSessionSnapshot) -> String? {
+        guard isResumeEnabled, isValidSessionId(session.sessionId) else { return nil }
+        if let transcriptPath = session.transcriptPath,
+           !FileManager.default.fileExists(atPath: transcriptPath) {
+            return nil
+        }
+        return "claude --resume \(session.sessionId)\n"
     }
 }

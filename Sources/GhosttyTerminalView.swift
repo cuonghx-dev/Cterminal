@@ -849,6 +849,8 @@ final class TerminalSurface: Identifiable, ObservableObject {
     private let surfaceContext: ghostty_surface_context_e
     private let configTemplate: ghostty_surface_config_s?
     private let workingDirectory: String?
+    /// Text typed into the shell once it starts (used to resume a Claude session on restore).
+    private let initialInput: String?
     let hostedView: GhosttySurfaceScrollView
     private let surfaceView: GhosttyNSView
     @Published var searchState: SearchState? = nil {
@@ -887,13 +889,15 @@ final class TerminalSurface: Identifiable, ObservableObject {
         tabId: UUID,
         context: ghostty_surface_context_e,
         configTemplate: ghostty_surface_config_s?,
-        workingDirectory: String? = nil
+        workingDirectory: String? = nil,
+        initialInput: String? = nil
     ) {
         self.id = UUID()
         self.tabId = tabId
         self.surfaceContext = context
         self.configTemplate = configTemplate
         self.workingDirectory = workingDirectory?.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.initialInput = initialInput
         let view = GhosttyNSView(frame: .zero)
         self.surfaceView = view
         self.hostedView = GhosttySurfaceScrollView(surfaceView: view)
@@ -984,6 +988,7 @@ final class TerminalSurface: Identifiable, ObservableObject {
         env["CTER_PANEL_ID"] = id.uuidString
         env["CTER_TAB_ID"] = tabId.uuidString
         env["CTER_SOCKET_PATH"] = SocketControlSettings.socketPath()
+        env["CTER_CLAUDE_SESSION_DIR"] = ClaudeSessionStore.shared.directoryURL.path
 
         if let cliBinPath = Bundle.main.resourceURL?.appendingPathComponent("bin").path {
             let currentPath = env["PATH"]
@@ -1067,13 +1072,24 @@ final class TerminalSurface: Identifiable, ObservableObject {
             }
         }
 
+        let createWithInput = {
+            if let initialInput = self.initialInput, !initialInput.isEmpty {
+                initialInput.withCString { cInput in
+                    surfaceConfig.initial_input = cInput
+                    createSurface()
+                }
+            } else {
+                createSurface()
+            }
+        }
+
         if let workingDirectory, !workingDirectory.isEmpty {
             workingDirectory.withCString { cWorkingDir in
                 surfaceConfig.working_directory = cWorkingDir
-                createSurface()
+                createWithInput()
             }
         } else {
-            createSurface()
+            createWithInput()
         }
 
         if surface == nil {
@@ -1213,6 +1229,8 @@ final class TerminalSurface: Identifiable, ObservableObject {
         guard !isClosed else { return }
         isClosed = true
         searchNeedleCancellable = nil
+        // A terminal the user closed must not bring its Claude session back on next launch.
+        ClaudeSessionStore.shared.removeSession(forSurface: id)
         // Drop the handlers that retain this surface (and its tab) so ARC can reclaim them.
         hostedView.setFocusHandler(nil)
         hostedView.setTriggerFlashHandler(nil)

@@ -3,7 +3,7 @@
 #
 # Compiles Sources/ with swiftc, links the prebuilt GhosttyKit static library, and
 # drops the binary into a copy of an existing CTerminal.app, so Info.plist, icon,
-# terminfo, shell integration and the `cter` CLI come from that bundle. The copy gets
+# terminfo and the `cter` CLI come from that bundle. The copy gets
 # its own bundle id, name and socket (like `reload.sh --tag`), so it runs next to
 # the installed app.
 #
@@ -11,7 +11,8 @@
 #   scripts/build-no-xcode.sh [--tag <name>] [--base <CTerminal.app>] [--debug] [--open]
 #
 # Requires GhosttyKit.xcframework (scripts/setup.sh). Resource or Info.plist changes in
-# the Xcode project are not picked up: only the binary and Resources/mermaid are refreshed.
+# the Xcode project are not picked up: only the binary, Resources/mermaid and
+# Resources/shell-integration are refreshed.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -78,6 +79,8 @@ ditto "$BASE_APP" "$APP"
 cp "${OUT_DIR}/CTerminal" "${APP}/Contents/MacOS/CTerminal"
 rm -rf "${APP}/Contents/Resources/mermaid"
 ditto Resources/mermaid "${APP}/Contents/Resources/mermaid"
+rm -rf "${APP}/Contents/Resources/shell-integration"
+ditto Resources/shell-integration "${APP}/Contents/Resources/shell-integration"
 
 PLIST="${APP}/Contents/Info.plist"
 pb() { /usr/libexec/PlistBuddy -c "$1" "$PLIST"; }

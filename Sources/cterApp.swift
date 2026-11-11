@@ -548,6 +548,7 @@ struct SettingsView: View {
     @AppStorage("sidebarShellIntegration") private var sidebarShellIntegration = true
     @AppStorage("sidebarMaxLogEntries") private var sidebarMaxLogEntries = 50
     @AppStorage(SessionStore.restoreSettingKey) private var restoreSessionOnLaunch = true
+    @AppStorage(ClaudeSessionStore.resumeSettingKey) private var resumeClaudeSessions = true
     @State private var notificationsShortcut = KeyboardShortcutSettings.showNotificationsShortcut()
     @State private var jumpToUnreadShortcut = KeyboardShortcutSettings.jumpToUnreadShortcut()
 
@@ -566,10 +567,12 @@ struct SettingsView: View {
 
             Section {
                 Toggle("Restore tabs on launch", isOn: $restoreSessionOnLaunch)
+                Toggle("Resume Claude Code sessions", isOn: $resumeClaudeSessions)
+                    .disabled(!restoreSessionOnLaunch)
             } header: {
                 Text("Startup")
             } footer: {
-                Text("Reopens the previous tabs, splits and pane tabs after a quit or crash. Each terminal starts a new shell in its last directory.")
+                Text("Reopens the previous tabs, splits and pane tabs after a quit or crash. Each terminal starts a new shell in its last directory. Terminals that were running Claude Code run `claude --resume` for the same session (needs shell integration).")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
@@ -683,6 +686,7 @@ struct SettingsView: View {
         sidebarShellIntegration = true
         sidebarMaxLogEntries = 50
         restoreSessionOnLaunch = true
+        resumeClaudeSessions = true
         KeyboardShortcutSettings.resetAll()
         notificationsShortcut = KeyboardShortcutSettings.showNotificationsDefault
         jumpToUnreadShortcut = KeyboardShortcutSettings.jumpToUnreadDefault

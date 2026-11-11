@@ -304,3 +304,31 @@ _cter_precmd() {
 autoload -Uz add-zsh-hook
 add-zsh-hook preexec _cter_preexec
 add-zsh-hook precmd _cter_precmd
+
+# Claude Code session tracking: record the session running in this terminal so cter can
+# resume it with `claude --resume` after the app quits or crashes. Subcommands
+# (`claude mcp`, `claude update`, ...) pass through untouched. Opt out with
+# CTER_CLAUDE_HOOKS_DISABLED=1.
+claude() {
+    if [[ -z "${CTER_PANEL_ID:-}" || -z "${CTER_CLAUDE_SESSION_DIR:-}" \
+        || -z "${CTER_SHELL_INTEGRATION_DIR:-}" || "${CTER_CLAUDE_HOOKS_DISABLED:-0}" == 1 ]]; then
+        command claude "$@"
+        return
+    fi
+    case "${1:-}" in
+        agents|attach|auth|auto-mode|doctor|gateway|import|install|logs|mcp|plugin|plugins|purge|respawn|rm|setup-token|stop|kill|ultrareview|update|upgrade)
+            command claude "$@"
+            return
+            ;;
+    esac
+    local settings='{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"/bin/sh \"$CTER_SHELL_INTEGRATION_DIR/cter-claude-hook.sh\""}]}]}}'
+    command claude --settings "$settings" "$@"
+    local rc=$?
+    # Claude ended while this shell lives on: the user closed the session, so don't resume
+    # it. An app quit or crash kills the shell too and never reaches this line. 148 means
+    # Claude was suspended (Ctrl-Z), not ended.
+    if (( rc != 148 )); then
+        command rm -f -- "$CTER_CLAUDE_SESSION_DIR/$CTER_PANEL_ID.json"
+    fi
+    return $rc
+}

@@ -193,12 +193,19 @@ class Tab: Identifiable, ObservableObject {
             case .pane(let pane):
                 let saved = pane.surfaces.isEmpty ? [SessionSnapshot.SurfaceSnapshot()] : pane.surfaces
                 let surfaces = saved.map { savedSurface -> TerminalSurface in
-                    let directory = SessionSnapshot.existingDirectory(savedSurface.directory) ?? tabDirectory
+                    var directory = SessionSnapshot.existingDirectory(savedSurface.directory) ?? tabDirectory
+                    var initialInput: String?
+                    if let claudeSession = savedSurface.claudeSession,
+                       let input = ClaudeSessionStore.resumeInput(for: claudeSession) {
+                        initialInput = input
+                        directory = SessionSnapshot.existingDirectory(claudeSession.directory) ?? directory
+                    }
                     let surface = TerminalSurface(
                         tabId: id,
                         context: GHOSTTY_SURFACE_CONTEXT_TAB,
                         configTemplate: nil,
-                        workingDirectory: directory
+                        workingDirectory: directory,
+                        initialInput: initialInput
                     )
                     if let directory { directories[surface.id] = directory }
                     if let title = savedSurface.title, !title.isEmpty { titles[surface.id] = title }
@@ -1244,6 +1251,8 @@ class TabManager: ObservableObject {
     /// Rebuilds tabs from the last saved session. Returns false when there is nothing to
     /// restore (no snapshot, restore disabled, or an unreadable file).
     private func restoreSession() -> Bool {
+        // Hook records are keyed by the previous run's terminal ids; the snapshot holds them.
+        ClaudeSessionStore.shared.removeAll()
         guard SessionStore.isRestoreEnabled, let snapshot = sessionStore.load() else { return false }
         let restored = snapshot.tabs.map { Tab(restoring: $0) }
         guard !restored.isEmpty else { return false }
