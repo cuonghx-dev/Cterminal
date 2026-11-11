@@ -2743,10 +2743,9 @@ final class GhosttySurfaceScrollView: NSView {
                 return
             }
 
-            if let previous, previous !== self {
-                _ = previous.surfaceView.resignFirstResponder()
-            }
-
+            // `makeFirstResponder` resigns the current responder itself. Calling
+            // `resignFirstResponder()` directly is invalid outside AppKit's own flow and
+            // raises an uncaught exception when the responder is an NSTextView.
             window.makeFirstResponder(self.surfaceView)
         }
 
@@ -2849,10 +2848,12 @@ final class GhosttySurfaceScrollView: NSView {
                 return
             }
 
-            if let responder = window.firstResponder as? NSView, responder !== self.surfaceView {
-                _ = responder.resignFirstResponder()
-            }
-
+            // Never call `resignFirstResponder()` on the current responder directly: when it
+            // is an NSTextView (find field, field editor) AppKit raises
+            // NSInternalInconsistencyException ("_newFirstResponderAfterResigning is not a
+            // valid message outside of a responder's implementation of
+            // -resignFirstResponder"), which terminated the whole app after a pane closed.
+            // `makeFirstResponder` performs the resign through the supported path.
             window.makeFirstResponder(self.surfaceView)
 
             if window.firstResponder !== self.surfaceView {
